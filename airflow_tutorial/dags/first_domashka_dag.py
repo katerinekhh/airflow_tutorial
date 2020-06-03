@@ -20,7 +20,7 @@ dag = DAG(
     'covid_dag',
     default_args=default_args,
     description='DAG updates covid info data daily',
-    schedule_interval='0 12 * * *',
+    schedule_interval='0 9 * * *',
 )
 
 
@@ -34,25 +34,26 @@ def get_covid_data_csv_from_ya_api(**kwargs):
 
     covid_russia_data = []
     for number, region_data in data.items():
-        if 'full_name' in region_data['info'].keys():
-            region_name = region_data['info']['full_name']
-        else:
-            continue
+        region_name = region_data['info']['name']
         infected = region_data['cases']
         recovered = region_data['cured']
-        dead = region_data['cured']
+        dead = region_data['deaths']
         for index in range(len(dates)):
             region_date_data = {}
             region_date_data['date'] = dates[index]
             region_date_data['region'] = region_name
-            region_date_data['infected'] = infected[index]['v']
-            region_date_data['recovered'] = recovered[index]['v']
-            region_date_data['dead'] = dead[index]['v']
+            if index < len(infected):
+                region_date_data['infected'] = int(infected[index]['v'])
+            if index < len(recovered):
+                region_date_data['recovered'] = int(recovered[index]['v'])
+            if index < len(dead):
+                region_date_data['dead'] = int(dead[index]['v'])
 
             covid_russia_data.append(region_date_data)
 
     covid_russia_dataframe = pd.DataFrame(covid_russia_data)
-    covid_russia_dataframe.to_csv('covid_data.csv', index=False)
+    covid_russia_dataframe.to_csv(
+        '/var/www/html/csv/covid_data.csv', index=False)
 
 
 get_covid_data_csv= PythonOperator(
