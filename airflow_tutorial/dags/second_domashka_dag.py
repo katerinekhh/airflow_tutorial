@@ -211,7 +211,7 @@ join_orders_info=PythonOperator(
     dag=dag,
 )
 
-load_orders_data_to_sql=PythonOperator(
+load_orders_data=PythonOperator(
     task_id='load_orders_data',
     provide_context=True,
     python_callable=load_orders_data_to_csv,
