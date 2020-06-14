@@ -25,7 +25,8 @@ dag = DAG(
 
 
 def get_covid_data_csv_from_ya_api(**kwargs):
-    result = requests.get('https://yastat.net/s3/milab/2020/covid19-stat/data/data_struct_10.json?v=timestamp')
+    result = requests.get(
+        'https://yastat.net/s3/milab/2020/covid19-stat/data/data_struct_10.json?v=timestamp')
     covid_data = eval(result.text)
 
     russia_stat_struct = covid_data['russia_stat_struct']
@@ -56,7 +57,7 @@ def get_covid_data_csv_from_ya_api(**kwargs):
         '/var/www/html/csv/covid_data.csv', index=False)
 
 
-get_covid_data_csv= PythonOperator(
+get_covid_data_csv = PythonOperator(
     task_id='get_covid_data_csv',
     provide_context=True,
     python_callable=get_covid_data_csv_from_ya_api,

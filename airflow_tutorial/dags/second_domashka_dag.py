@@ -1,5 +1,4 @@
 from datetime import timedelta, datetime, date
-import requests
 import csv
 import json
 import pandas as pd
@@ -13,7 +12,6 @@ from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators import ShortCircuitOperator
 from airflow.hooks.http_hook import HttpHook
 from airflow.models import Variable
-from airflow.models import TaskInstance
 
 TOKEN = Variable.get('telegram_token')
 CHAT_ID = Variable.get('chat_id')
@@ -76,7 +74,7 @@ def export_http_data_to_file(filepath, conn_id, endpoint, **kwargs):
     response = http.run(endpoint)
     with open(filepath, 'w') as csv_file:
         csv_file.write(response.text)
-        
+
 
 def get_orders_dict():
     with open(ORDERS_FILE_PATH) as csv_file:
@@ -217,7 +215,7 @@ postgres_check = ShortCircuitOperator(
     dag=dag,
 )
 
-get_customers_csv=PythonOperator(
+get_customers_csv = PythonOperator(
     task_id='get_customers_csv',
     provide_context=True,
     python_callable=export_postgres_data_to_csv,
@@ -225,7 +223,7 @@ get_customers_csv=PythonOperator(
     dag=dag,
 )
 
-get_goods_csv=PythonOperator(
+get_goods_csv = PythonOperator(
     task_id='get_goods_csv',
     provide_context=True,
     python_callable=export_postgres_data_to_csv,
@@ -233,7 +231,7 @@ get_goods_csv=PythonOperator(
     dag=dag,
 )
 
-get_orders_csv=PythonOperator(
+get_orders_csv = PythonOperator(
     task_id='get_orders_csv',
     provide_context=True,
     python_callable=export_http_data_to_file,
@@ -245,7 +243,7 @@ get_orders_csv=PythonOperator(
     dag=dag,
 )
 
-get_status_csv=PythonOperator(
+get_status_csv = PythonOperator(
     task_id='get_status_csv',
     provide_context=True,
     python_callable=export_http_data_to_file,
@@ -257,7 +255,7 @@ get_status_csv=PythonOperator(
     dag=dag,
 )
 
-join_orders_info=PythonOperator(
+join_orders_info = PythonOperator(
     task_id='join_orders_info',
     provide_context=True,
     python_callable=write_data_to_csv,
@@ -271,14 +269,14 @@ shop_data_check = BranchPythonOperator(
     dag=dag,
 )
 
-telegram_warning=PythonOperator(
+telegram_warning = PythonOperator(
     task_id='telegram_warning',
     provide_context=True,
     python_callable=send_telegram_warning,
     dag=dag,
 )
 
-load_orders_data=PythonOperator(
+load_orders_data = PythonOperator(
     task_id='load_orders_data',
     provide_context=True,
     python_callable=load_orders_data_to_csv,
@@ -287,4 +285,4 @@ load_orders_data=PythonOperator(
 
 
 postgres_check >> get_customers_csv >> get_goods_csv >> get_orders_csv >> get_status_csv >> join_orders_info
-join_orders_info >> telegram_warning >> (shop_data_check, load_orders_data)
+join_orders_info >> shop_data_check >> (telegram_warning, load_orders_data)
