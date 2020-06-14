@@ -3,12 +3,20 @@ import requests
 import csv
 import json
 import pandas as pd
+import telebot
 
 from airflow import DAG
 from airflow.utils.dates import days_ago
 from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import BranchPythonOperator
 from airflow.hooks.postgres_hook import PostgresHook
+from airflow.operators import ShortCircuitOperator
 from airflow.hooks.http_hook import HttpHook
+from airflow.models import Variable
+from airflow.models import TaskInstance
+
+TOKEN = Variable.get('telegram_token')
+CHAT_ID = Variable.get('chat_id')
 
 GOODS_FILE_PATH = '/tmp/goods.csv'
 CUSTOMERS_FILE_PATH = '/tmp/customers.csv'
@@ -39,6 +47,16 @@ dag = DAG(
     description='DAG updates some shopping data',
     schedule_interval='0 10 * * *',
 )
+
+
+def check_postgresql_available(**kwargs):
+    """проверяет, что таблица в локальной базе существует"""
+    engine = PostgresHook(postgres_conn_id='tutorial_local').get_sqlalchemy_engine()
+    try:
+        pd.read_sql_table('orders_table', engine)
+        return True
+    except ValueError:
+        return False
 
 
 def export_postgres_data_to_csv(filepath, query, **kwargs):
@@ -129,6 +147,34 @@ def get_joined_data(**kwargs):
     return orders_data
 
 
+def check_if_shop_data_available(task, **kwargs):
+    """разрешает грузить данные в таблицу, если больше половины заказов ок (есть 8 значений для колонок)"""
+    task_info = kwargs['ti']
+    task_info.xcom_push(key='check_data_task_id', value=task_info.task_id)
+    task_info.xcom_push(key='dag_id', value=task_info.dag_id)
+
+    orders_data = get_joined_data()
+    weird_orders_amount = 0
+    for order_id, order_info in orders_data.items():
+        if len(order_info) != 8:
+            weird_orders_amount += 1
+
+    if weird_orders_amount < len(orders_data):
+        return 'load_orders_data'
+    else:
+        return 'send_telegram_warning'
+
+
+def send_telegram_warning(**kwargs):
+    task_info = kwargs['ti']
+    dag_id = task_info.xcom_pull(key='dag_id')
+    task_id = task_info.xcom_pull(key='check_data_task_id')
+    bot = telebot.TeleBot(TOKEN)
+    markup = telebot.types.InlineKeyboardMarkup()
+    bot.send_message(
+        CHAT_ID, f'broken data :-( dag_id - {dag_id}, task_id - {task_id}', reply_markup=markup)
+
+
 def write_data_to_csv(**kwargs):
     orders_data = get_joined_data()
     with open(JOINED_DATA_FILE_PATH, 'w') as csv_file:
@@ -163,6 +209,13 @@ def load_orders_data_to_csv(**kwargs):
         index=False,
     )
 
+
+postgres_check = ShortCircuitOperator(
+    task_id='postgres_check',
+    provide_context=False,
+    python_callable=check_postgresql_available,
+    dag=dag,
+)
 
 get_customers_csv=PythonOperator(
     task_id='get_customers_csv',
@@ -211,6 +264,20 @@ join_orders_info=PythonOperator(
     dag=dag,
 )
 
+shop_data_check = BranchPythonOperator(
+    task_id='shop_data_check',
+    python_callable=check_if_shop_data_available,
+    provide_context=True,
+    dag=dag,
+)
+
+telegram_warning=PythonOperator(
+    task_id='telegram_warning',
+    provide_context=True,
+    python_callable=send_telegram_warning,
+    dag=dag,
+)
+
 load_orders_data=PythonOperator(
     task_id='load_orders_data',
     provide_context=True,
@@ -219,4 +286,5 @@ load_orders_data=PythonOperator(
 )
 
 
-get_customers_csv >> get_goods_csv >> get_orders_csv >> get_status_csv >> join_orders_info >> load_orders_data
+postgres_check >> get_customers_csv >> get_goods_csv >> get_orders_csv >> get_status_csv >> join_orders_info
+join_orders_info >> telegram_warning >> (shop_data_check, load_orders_data)

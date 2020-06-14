@@ -17,8 +17,8 @@ AIRTABLE_API_KEY = Variable.get('airtable_api_key')
 AIRTABLE_TG_TABLE_KEY = Variable.get('airtable_tg_table_key')
 AIRTABLE_TG_TABLE_NAME = Variable.get('airtable_tg_table_name')
 TEXT = 'Поехали'
-MESSAGE_ID_FILE_PATH = 'message_id_file.txt'
-UPDATE_FILE_PATH = 'update_file.json'
+MESSAGE_ID_FILE_PATH = '/tmp/message_id_file.txt'
+UPDATE_FILE_PATH = '/tmp/update_file.json'
 
 
 default_args = {
